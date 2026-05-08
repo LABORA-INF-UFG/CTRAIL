@@ -1,0 +1,160 @@
+{
+  "zoneMappings": [
+    {
+      "zoneId": "zone-north",
+      "name": "Zone North",
+      "regionId": "north",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "8.8.8.8",
+      "appServerMask": "16",
+      "ueNetworkMask": "16",
+      "dnai": "mec",
+      "network": {
+        "dnn": "internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "010203"
+        }
+      },
+      "description": "North zone mapping"
+    },
+    {
+      "zoneId": "zone-central",
+      "name": "Zone Central",
+      "regionId": "central",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "5.5.5.5",
+      "appServerMask": "24",
+      "ueNetworkMask": "24",
+      "dnai": "edge-central",
+      "network": {
+        "dnn": "edge-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "020304"
+        }
+      },
+      "description": "Central zone mapping"
+    },
+    {
+      "zoneId": "zone-south",
+      "name": "Zone South",
+      "regionId": "south",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "8.8.8.8",
+      "appServerMask": "16",
+      "ueNetworkMask": "16",
+      "dnai": "cloud-south",
+      "network": {
+        "dnn": "cloud-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "030405"
+        }
+      },
+      "description": "South zone mapping"
+    },
+    {
+      "zoneId": "camara-mec-zone-1",
+      "name": "MEC Zone North",
+      "regionId": "north",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "8.8.8.8",
+      "appServerMask": "16",
+      "ueNetworkMask": "16",
+      "dnai": "mec",
+      "network": {
+        "dnn": "internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "010203"
+        }
+      },
+      "description": "North MEC zone mapping"
+    },
+    {
+      "zoneId": "camara-edge-zone-central",
+      "name": "Edge Zone Central",
+      "regionId": "central",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "5.5.5.5",
+      "appServerMask": "24",
+      "ueNetworkMask": "24",
+      "dnai": "edge-central",
+      "network": {
+        "dnn": "edge-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "020304"
+        }
+      },
+      "description": "Central edge zone mapping"
+    },
+    {
+      "zoneId": "camara-cloud-zone-south",
+      "name": "Cloud Zone South",
+      "regionId": "south",
+      "provider": "operator",
+      "status": "active",
+      "appServer": "8.8.8.8",
+      "appServerMask": "16",
+      "ueNetworkMask": "16",
+      "dnai": "cloud-south",
+      "network": {
+        "dnn": "cloud-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "030405"
+        }
+      },
+      "description": "South cloud zone mapping"
+    }
+  ],
+  "policyRules": [
+    {
+      "condition": "region=north",
+      "network": {
+        "dnn": "north-priority-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "010203"
+        }
+      },
+      "priority": 10
+    },
+    {
+      "condition": "region=south",
+      "network": {
+        "dnn": "south-priority-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "030405"
+        }
+      },
+      "priority": 10
+    },
+    {
+      "condition": "appInstance=critical-app",
+      "network": {
+        "dnn": "critical-internet",
+        "snssai": {
+          "sst": 1,
+          "sd": "999999"
+        }
+      },
+      "priority": 5
+    }
+  ],
+  "default": {
+    "dnn": "internet",
+    "snssai": {
+      "sst": 1,
+      "sd": "010203"
+    }
+  }
+}

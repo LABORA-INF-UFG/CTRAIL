@@ -1,0 +1,165 @@
+openapi: 3.0.3
+info:
+  title: Edge Application Management — Edge Cloud Zones
+  version: wip
+  description: |
+    Partial implementation of the CAMARA Edge Application Management API,
+    scoped to the edge cloud zone catalog endpoint used by C2N for zone
+    discovery. Consumers call GET /edge-cloud-zones to enumerate all zones
+    known to the gateway topology engine before submitting a Traffic Influence
+    subscription.
+
+    Full CAMARA specification:
+    https://github.com/camaraproject/EdgeApplicationManagement
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: "{apiRoot}"
+    variables:
+      apiRoot:
+        default: http://localhost:8080
+        description: Gateway base URL
+
+tags:
+  - name: Edge Cloud Zones
+    description: Enumerate available edge cloud zones.
+
+paths:
+  /edge-cloud-zones:
+    get:
+      operationId: listEdgeCloudZones
+      tags:
+        - Edge Cloud Zones
+      summary: List all available edge cloud zones
+      description: |
+        Returns the catalog of edge cloud zones known to the gateway. Results
+        can be filtered by region name and/or operational status.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: region
+          in: query
+          required: false
+          description: Filter by edge cloud region name (e.g. "north", "central").
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          description: Filter by zone operational status.
+          schema:
+            $ref: "#/components/schemas/EdgeCloudZoneStatus"
+      responses:
+        "200":
+          description: Array of edge cloud zones matching the requested filters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeCloudZone"
+              examples:
+                AllZones:
+                  summary: All zones (no filters)
+                  value:
+                    - edgeCloudZoneId: "camara-mec-zone-1"
+                      edgeCloudZoneName: "MEC Zone North"
+                      edgeCloudProvider: "operator"
+                      edgeCloudZoneStatus: "active"
+                      edgeCloudRegion: "north"
+                    - edgeCloudZoneId: "camara-edge-zone-central"
+                      edgeCloudZoneName: "Edge Zone Central"
+                      edgeCloudProvider: "operator"
+                      edgeCloudZoneStatus: "active"
+                      edgeCloudRegion: "central"
+                    - edgeCloudZoneId: "camara-cloud-zone-south"
+                      edgeCloudZoneName: "Cloud Zone South"
+                      edgeCloudProvider: "operator"
+                      edgeCloudZoneStatus: "active"
+                      edgeCloudRegion: "south"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "429":
+          $ref: "#/components/responses/Generic429"
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+
+  schemas:
+    EdgeCloudZone:
+      type: object
+      description: An edge cloud zone available in the operator network.
+      required:
+        - edgeCloudZoneId
+        - edgeCloudZoneName
+        - edgeCloudProvider
+      properties:
+        edgeCloudZoneId:
+          type: string
+          description: Unique identifier for the edge cloud zone (used in Traffic Influence requests).
+          example: "camara-mec-zone-1"
+        edgeCloudZoneName:
+          type: string
+          description: Human-readable name of the edge cloud zone.
+          example: "MEC Zone North"
+        edgeCloudProvider:
+          type: string
+          description: Name of the operator or cloud provider hosting the zone.
+          example: "operator"
+        edgeCloudZoneStatus:
+          $ref: "#/components/schemas/EdgeCloudZoneStatus"
+        edgeCloudRegion:
+          type: string
+          description: Region the zone belongs to.
+          example: "north"
+
+    EdgeCloudZoneStatus:
+      type: string
+      description: Operational status of the edge cloud zone.
+      enum:
+        - active
+        - inactive
+        - unknown
+      example: "active"
+
+    ErrorInfo:
+      type: object
+      required:
+        - status
+        - code
+        - message
+      properties:
+        status:
+          type: integer
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Generic401:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 401
+            code: UNAUTHENTICATED
+            message: Request not authenticated due to missing, invalid, or expired credentials.
+
+    Generic429:
+      description: Too Many Requests
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 429
+            code: TOO_MANY_REQUESTS
+            message: Rate limit reached.

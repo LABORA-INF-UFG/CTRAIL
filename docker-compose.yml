@@ -1,0 +1,24 @@
+services:
+  ctrail:
+    build: .
+    ports:
+      - "8080:8080"
+      - "6060:6060"
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    networks:
+      - free5gc-compose_privnet
+    restart: unless-stopped
+    container_name: ctrail
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8080/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+
+networks:
+  free5gc-compose_privnet:
+    external: false

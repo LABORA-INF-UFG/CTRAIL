@@ -1,0 +1,21 @@
+services:
+  ctrail:
+    build:
+      context: .
+      args:
+        STRIP_SYMBOLS: "false"
+    ports:
+      - "8080:8080"
+      - "6060:6060"
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    networks:
+      - c2n_profiling
+    restart: unless-stopped
+    container_name: ctrail-pprof
+
+networks:
+  c2n_profiling:

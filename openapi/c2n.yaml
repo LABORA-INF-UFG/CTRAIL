@@ -1,0 +1,1124 @@
+openapi: 3.0.3
+info:
+  title: C2N — CAMARA-to-NEF Gateway
+  version: wip
+  description: |
+    # C2N Gateway API
+
+    C2N (CAMARA-to-NEF) is a gateway that exposes CAMARA-compliant APIs to
+    application functions and translates them to 3GPP NEF (TS 29.522)
+    subscriptions on the backend.
+
+    ## APIs implemented
+
+    | API | CAMARA specification | Status |
+    |-----|----------------------|--------|
+    | Traffic Influence | CAMARA Traffic Influence API | Implemented |
+    | Edge Cloud Zones | CAMARA Edge Application Management (partial) | Implemented |
+
+    ## Authentication
+
+    Two authentication schemes are supported depending on the endpoint group:
+
+    - **Basic Auth** — used on root CAMARA endpoints (`/traffic-influences`,
+      `/edge-cloud-zones`).
+    - **OAuth2 / API Key** — used on versioned endpoints (`/api/v1/...`).
+      Fine-grained per-operation permissions apply.
+
+    Admin and callback endpoints require specific permissions as noted per
+    operation.
+
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+tags:
+  - name: Health
+    description: Liveness and readiness probes.
+  - name: Traffic Influence
+    description: |
+      CAMARA Traffic Influence API — manage subscriptions that steer user
+      plane traffic toward specific edge cloud zones.
+  - name: Edge Cloud Zones
+    description: |
+      CAMARA Edge Application Management (partial) — enumerate available
+      edge cloud zones known to the gateway.
+  - name: Admin
+    description: Internal gateway management endpoints.
+  - name: Callbacks
+    description: Inbound callback endpoints for NEF asynchronous notifications.
+
+# ---------------------------------------------------------------------------
+# Paths
+# ---------------------------------------------------------------------------
+paths:
+
+  # -------------------------------------------------------------------------
+  # Health
+  # -------------------------------------------------------------------------
+  /health:
+    get:
+      operationId: getHealth
+      tags: [Health]
+      summary: Gateway health check
+      description: Returns the operational status of all internal modules and summary statistics.
+      security: []
+      responses:
+        "200":
+          description: Gateway is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: healthy
+                timestamp: "2026-05-08T12:00:00Z"
+                modules:
+                  ingress: operational
+                  topology: operational
+                  mapper: operational
+                  builder: operational
+                  state: operational
+                  response: operational
+                statistics:
+                  total: 10
+                  active: 7
+
+  /security/health:
+    get:
+      operationId: getSecurityHealth
+      tags: [Health]
+      summary: Security module health check
+      description: Returns the health status of the security subsystem including any configuration issues.
+      security: []
+      responses:
+        "200":
+          description: Security module status.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /stats:
+    get:
+      operationId: getStats
+      tags: [Admin]
+      summary: Detailed gateway statistics
+      description: Returns detailed subscription statistics from the state manager.
+      security:
+        - basicAuth: []
+      responses:
+        "200":
+          description: Statistics object.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Generic401"
+
+  /security/metrics:
+    get:
+      operationId: getSecurityMetrics
+      tags: [Admin]
+      summary: Security metrics export
+      description: Exports API key usage, rate limit counters, and security configuration.
+      security:
+        - basicAuth: []
+      responses:
+        "200":
+          description: Security metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "401":
+          $ref: "#/components/responses/Generic401"
+
+  # -------------------------------------------------------------------------
+  # Traffic Influence — CAMARA root endpoints (Basic Auth)
+  # -------------------------------------------------------------------------
+  /traffic-influences:
+    post:
+      operationId: createTrafficInfluence
+      tags: [Traffic Influence]
+      summary: Create a traffic influence subscription
+      description: |
+        Creates a new subscription that steers user plane traffic toward a
+        specific edge cloud zone. The gateway translates the CAMARA request
+        to a 3GPP NEF TS 29.522 subscription and returns the result with a
+        gateway-assigned `trafficInfluenceID`.
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficInfluenceRequest"
+            examples:
+              AllUEs:
+                summary: All UEs to a MEC zone
+                value:
+                  appId: Service1
+                  edgeCloudZoneId: camara-mec-zone-1
+                  notificationUri: https://myapp.example.com/callbacks/traffic
+              SpecificUE:
+                summary: Specific UE by IPv4
+                value:
+                  appId: Service1
+                  edgeCloudZoneId: camara-mec-zone-1
+                  device:
+                    ipv4Address:
+                      publicAddress: 10.60.0.1
+                  notificationUri: https://myapp.example.com/callbacks/traffic
+              WithPortFilter:
+                summary: Destination port filter (HTTPS video)
+                value:
+                  appId: VideoStreamApp
+                  edgeCloudZoneId: camara-edge-zone-central
+                  destinationTrafficFilters:
+                    destinationPort: 443
+                    destinationProtocol: TCP
+                  notificationUri: https://video.example.com/nef-notify
+      responses:
+        "201":
+          description: Subscription created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+              example:
+                trafficInfluenceID: 550e8400-e29b-41d4-a716-446655440000
+                appId: Service1
+                edgeCloudZoneId: camara-mec-zone-1
+                state: created
+                notificationUri: https://myapp.example.com/callbacks/traffic
+        "200":
+          description: Subscription accepted (NEF returned 200).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+    get:
+      operationId: listTrafficInfluences
+      tags: [Traffic Influence]
+      summary: List traffic influence subscriptions
+      description: |
+        Returns all subscriptions held in the gateway state, optionally
+        filtered by `appId`, `edgeCloudZoneId`, and/or `state`.
+      security:
+        - basicAuth: []
+      parameters:
+        - $ref: "#/components/parameters/AppIdFilter"
+        - $ref: "#/components/parameters/EdgeCloudZoneIdFilter"
+        - $ref: "#/components/parameters/StateFilter"
+      responses:
+        "200":
+          description: Array of matching subscriptions (empty array if none).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TrafficInfluenceResponse"
+              example:
+                - trafficInfluenceID: 550e8400-e29b-41d4-a716-446655440000
+                  appId: Service1
+                  edgeCloudZoneId: camara-mec-zone-1
+                  state: created
+                  notificationUri: https://myapp.example.com/callbacks/traffic
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "500":
+          $ref: "#/components/responses/Generic500"
+
+  /traffic-influences/{trafficInfluenceID}:
+    parameters:
+      - $ref: "#/components/parameters/TrafficInfluenceID"
+
+    get:
+      operationId: getTrafficInfluence
+      tags: [Traffic Influence]
+      summary: Get a traffic influence subscription
+      description: |
+        Retrieves the current state and configuration of a subscription by its
+        gateway-assigned ID. The `device` field is intentionally omitted from
+        the response for privacy compliance.
+      security:
+        - basicAuth: []
+      responses:
+        "200":
+          description: Subscription found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "404":
+          $ref: "#/components/responses/Generic404"
+
+    put:
+      operationId: updateTrafficInfluence
+      tags: [Traffic Influence]
+      summary: Replace a traffic influence subscription
+      description: |
+        Replaces the full configuration of an existing subscription. The
+        gateway translates the updated request to a NEF PUT and returns
+        the updated state.
+      security:
+        - basicAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficInfluenceRequest"
+      responses:
+        "200":
+          description: Subscription updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "404":
+          $ref: "#/components/responses/Generic404"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+    delete:
+      operationId: deleteTrafficInfluence
+      tags: [Traffic Influence]
+      summary: Delete a traffic influence subscription
+      description: |
+        Deletes the subscription from both the NEF backend and the gateway
+        state. Returns 204 No Content on success.
+      security:
+        - basicAuth: []
+      responses:
+        "204":
+          description: Subscription deleted.
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "404":
+          $ref: "#/components/responses/Generic404"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+  # -------------------------------------------------------------------------
+  # Edge Cloud Zones (CAMARA Edge Application Management — partial)
+  # -------------------------------------------------------------------------
+  /edge-cloud-zones:
+    get:
+      operationId: listEdgeCloudZones
+      tags: [Edge Cloud Zones]
+      summary: List available edge cloud zones
+      description: |
+        Returns all edge cloud zones known to the gateway topology engine.
+        Use the returned `edgeCloudZoneId` values as the `edgeCloudZoneId`
+        field in Traffic Influence subscription requests.
+
+        Results can be narrowed with the optional `region` and `status`
+        query parameters.
+      security:
+        - basicAuth: []
+      parameters:
+        - name: region
+          in: query
+          required: false
+          description: Filter by edge cloud region (e.g. `north`, `central`, `south`).
+          schema:
+            type: string
+            example: north
+        - name: status
+          in: query
+          required: false
+          description: Filter by operational status.
+          schema:
+            $ref: "#/components/schemas/EdgeCloudZoneStatus"
+      responses:
+        "200":
+          description: Array of edge cloud zones matching the filters.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/EdgeCloudZone"
+              examples:
+                AllZones:
+                  summary: All zones (no filter)
+                  value:
+                    - edgeCloudZoneId: zone-north
+                      edgeCloudZoneName: Zone North
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: north
+                    - edgeCloudZoneId: zone-central
+                      edgeCloudZoneName: Zone Central
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: central
+                    - edgeCloudZoneId: zone-south
+                      edgeCloudZoneName: Zone South
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: south
+                    - edgeCloudZoneId: camara-mec-zone-1
+                      edgeCloudZoneName: MEC Zone North
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: north
+                    - edgeCloudZoneId: camara-edge-zone-central
+                      edgeCloudZoneName: Edge Zone Central
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: central
+                    - edgeCloudZoneId: camara-cloud-zone-south
+                      edgeCloudZoneName: Cloud Zone South
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: south
+                NorthOnly:
+                  summary: Filter by region=north
+                  value:
+                    - edgeCloudZoneId: zone-north
+                      edgeCloudZoneName: Zone North
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: north
+                    - edgeCloudZoneId: camara-mec-zone-1
+                      edgeCloudZoneName: MEC Zone North
+                      edgeCloudProvider: operator
+                      edgeCloudZoneStatus: active
+                      edgeCloudRegion: north
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "429":
+          $ref: "#/components/responses/Generic429"
+
+  # -------------------------------------------------------------------------
+  # Traffic Influence — versioned API v1 (OAuth2 + API Key, per-op RBAC)
+  # -------------------------------------------------------------------------
+  /api/v1/traffic-influences/:
+    post:
+      operationId: createTrafficInfluenceV1
+      tags: [Traffic Influence]
+      summary: Create a traffic influence subscription (v1)
+      description: Same as `POST /traffic-influences` with explicit `traffic_influence:create` permission check.
+      security:
+        - bearerAuth: ["traffic_influence:create"]
+        - apiKeyAuth: ["traffic_influence:create"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficInfluenceRequest"
+      responses:
+        "201":
+          description: Subscription created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+  /api/v1/traffic-influences/{trafficInfluenceID}:
+    parameters:
+      - $ref: "#/components/parameters/TrafficInfluenceID"
+
+    get:
+      operationId: getTrafficInfluenceV1
+      tags: [Traffic Influence]
+      summary: Get a traffic influence subscription (v1)
+      description: Same as `GET /traffic-influences/{id}`. Requires `traffic_influence:read`.
+      security:
+        - bearerAuth: ["traffic_influence:read"]
+        - apiKeyAuth: ["traffic_influence:read"]
+      responses:
+        "200":
+          description: Subscription found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "404":
+          $ref: "#/components/responses/Generic404"
+
+    put:
+      operationId: updateTrafficInfluenceV1
+      tags: [Traffic Influence]
+      summary: Replace a traffic influence subscription (v1)
+      description: Same as `PUT /traffic-influences/{id}`. Requires `traffic_influence:update`.
+      security:
+        - bearerAuth: ["traffic_influence:update"]
+        - apiKeyAuth: ["traffic_influence:update"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrafficInfluenceRequest"
+      responses:
+        "200":
+          description: Subscription updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrafficInfluenceResponse"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "404":
+          $ref: "#/components/responses/Generic404"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+    delete:
+      operationId: deleteTrafficInfluenceV1
+      tags: [Traffic Influence]
+      summary: Delete a traffic influence subscription (v1)
+      description: Same as `DELETE /traffic-influences/{id}`. Requires `traffic_influence:delete`.
+      security:
+        - bearerAuth: ["traffic_influence:delete"]
+        - apiKeyAuth: ["traffic_influence:delete"]
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "404":
+          $ref: "#/components/responses/Generic404"
+        "502":
+          $ref: "#/components/responses/Generic502"
+
+  # -------------------------------------------------------------------------
+  # Admin — /api/v1/admin (requires `admin` permission)
+  # -------------------------------------------------------------------------
+  /api/v1/admin/subscriptions:
+    get:
+      operationId: adminListSubscriptions
+      tags: [Admin]
+      summary: List all gateway subscriptions (raw)
+      description: |
+        Returns the full internal state of all subscriptions including gateway
+        ID, NEF subscription ID, state, timestamps, and the original CAMARA
+        request. Requires `admin` permission.
+      security:
+        - bearerAuth: ["admin"]
+        - apiKeyAuth: ["admin"]
+      responses:
+        "200":
+          description: Subscription list with count.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSubscriptionList"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+        "500":
+          $ref: "#/components/responses/Generic500"
+
+  /api/v1/admin/security/api-keys:
+    post:
+      operationId: adminGenerateApiKey
+      tags: [Admin]
+      summary: Generate a new API key
+      description: Issues a new API key for the given `clientId`. Requires `admin` permission.
+      security:
+        - bearerAuth: ["admin"]
+        - apiKeyAuth: ["admin"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clientId]
+              properties:
+                clientId:
+                  type: string
+                  example: my-app-client
+      responses:
+        "201":
+          description: API key created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    type: string
+                  clientId:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          $ref: "#/components/responses/Generic400"
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+
+  /api/v1/admin/security/cleanup:
+    delete:
+      operationId: adminSecurityCleanup
+      tags: [Admin]
+      summary: Purge expired security tokens
+      description: Removes expired JWT tokens and rate-limit entries. Requires `admin` permission.
+      security:
+        - bearerAuth: ["admin"]
+        - apiKeyAuth: ["admin"]
+      responses:
+        "200":
+          description: Cleanup completed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  tokensRemoved:
+                    type: integer
+                  timestamp:
+                    type: string
+                    format: date-time
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+
+  # -------------------------------------------------------------------------
+  # NEF Callbacks
+  # -------------------------------------------------------------------------
+  /callbacks/nef/notifications:
+    post:
+      operationId: nefNotification
+      tags: [Callbacks]
+      summary: Receive NEF asynchronous notification
+      description: |
+        Endpoint called by the 3GPP NEF to deliver asynchronous event
+        notifications (e.g. `TRAFFIC_INFLUENCE_ACTIVE`,
+        `TRAFFIC_INFLUENCE_INACTIVE`, `TRAFFIC_INFLUENCE_ERROR`).
+        Requires `nef_callback` permission.
+      security:
+        - bearerAuth: ["nef_callback"]
+        - apiKeyAuth: ["nef_callback"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NEFNotification"
+      responses:
+        "200":
+          description: Notification received and processed.
+        "401":
+          $ref: "#/components/responses/Generic401"
+        "403":
+          $ref: "#/components/responses/Generic403"
+
+# ---------------------------------------------------------------------------
+# Components
+# ---------------------------------------------------------------------------
+components:
+
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Username/password used on root CAMARA endpoints.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth2 JWT used on /api/v1 endpoints.
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key used as an alternative to bearer on /api/v1 endpoints.
+
+  parameters:
+    TrafficInfluenceID:
+      name: trafficInfluenceID
+      in: path
+      required: true
+      description: Gateway-assigned UUID for the traffic influence subscription.
+      schema:
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440000
+
+    AppIdFilter:
+      name: appId
+      in: query
+      required: false
+      description: Filter subscriptions by application identifier.
+      schema:
+        type: string
+        example: Service1
+
+    EdgeCloudZoneIdFilter:
+      name: edgeCloudZoneId
+      in: query
+      required: false
+      description: Filter subscriptions by edge cloud zone identifier.
+      schema:
+        type: string
+        example: camara-mec-zone-1
+
+    StateFilter:
+      name: state
+      in: query
+      required: false
+      description: Filter subscriptions by current state.
+      schema:
+        type: string
+        enum: [ordered, created, active, inactive, error, deleted]
+        example: active
+
+  schemas:
+
+    # -----------------------------------------------------------------------
+    # Traffic Influence
+    # -----------------------------------------------------------------------
+    TrafficInfluenceRequest:
+      type: object
+      description: Request body for creating or replacing a traffic influence subscription.
+      required:
+        - appId
+      properties:
+        appId:
+          type: string
+          description: Application identifier.
+          example: Service1
+        edgeCloudZoneId:
+          type: string
+          description: Target edge cloud zone. At least one of edgeCloudZoneId, edgeCloudRegion, or appInstanceId is required.
+          example: camara-mec-zone-1
+        edgeCloudRegion:
+          type: string
+          description: Target edge cloud region (alternative to edgeCloudZoneId).
+          example: north
+        appInstanceId:
+          type: string
+          description: Specific application instance identifier (alternative to zone/region).
+          example: instance-abc-123
+        device:
+          $ref: "#/components/schemas/Device"
+        sourceTrafficFilters:
+          $ref: "#/components/schemas/SourceTrafficFilter"
+        destinationTrafficFilters:
+          $ref: "#/components/schemas/DestinationTrafficFilter"
+        notificationUri:
+          type: string
+          format: uri
+          description: Callback URI for subscription lifecycle notifications.
+          example: https://myapp.example.com/callbacks/traffic
+        notificationAuthToken:
+          type: string
+          description: Bearer token the gateway will include when calling notificationUri.
+          example: my-secret-token
+        notificationSink:
+          $ref: "#/components/schemas/NotificationSink"
+
+    TrafficInfluenceResponse:
+      type: object
+      description: |
+        Response body for traffic influence operations. The `device` field is
+        intentionally omitted for privacy compliance.
+      required:
+        - trafficInfluenceID
+        - state
+      properties:
+        trafficInfluenceID:
+          type: string
+          description: Gateway-assigned unique identifier (UUID).
+          example: 550e8400-e29b-41d4-a716-446655440000
+        apiConsumerId:
+          type: string
+          description: Identifier of the API consumer (when available).
+        appId:
+          type: string
+          example: Service1
+        appInstanceId:
+          type: string
+        edgeCloudZoneId:
+          type: string
+          example: camara-mec-zone-1
+        edgeCloudRegion:
+          type: string
+          example: north
+        state:
+          type: string
+          description: Current subscription state.
+          enum: [ordered, created, active, inactive, error]
+          example: created
+        sourceTrafficFilters:
+          $ref: "#/components/schemas/SourceTrafficFilter"
+        destinationTrafficFilters:
+          $ref: "#/components/schemas/DestinationTrafficFilter"
+        notificationUri:
+          type: string
+          format: uri
+          example: https://myapp.example.com/callbacks/traffic
+        selected_appInstanceId:
+          type: string
+          description: Application instance selected by the network.
+
+    Device:
+      type: object
+      description: End-user device identification. Omit to apply the policy to all UEs.
+      properties:
+        ipv4Address:
+          $ref: "#/components/schemas/IPv4Address"
+        phoneNumber:
+          type: string
+          description: MSISDN in E.164 format.
+          example: "+5511999999999"
+
+    IPv4Address:
+      type: object
+      required:
+        - publicAddress
+      properties:
+        publicAddress:
+          type: string
+          format: ipv4
+          description: Public (observed) IPv4 address.
+          example: 10.60.0.1
+        privateAddress:
+          type: string
+          format: ipv4
+          example: 192.168.1.10
+        publicPort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          example: 5000
+
+    SourceTrafficFilter:
+      type: object
+      properties:
+        sourcePort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Source UDP/TCP port to match.
+          example: 5000
+
+    DestinationTrafficFilter:
+      type: object
+      properties:
+        destinationPort:
+          type: integer
+          minimum: 0
+          maximum: 65535
+          description: Destination UDP/TCP port to match.
+          example: 443
+        destinationProtocol:
+          type: string
+          description: Transport protocol to match.
+          enum: [TCP, UDP]
+          example: TCP
+
+    NotificationSink:
+      type: object
+      required:
+        - sink
+      description: CloudEvents-compatible notification sink configuration.
+      properties:
+        sink:
+          type: string
+          format: uri
+          description: Callback URI for CloudEvents delivery.
+          example: https://myapp.example.com/events
+        sinkCredentials:
+          $ref: "#/components/schemas/SinkCredentials"
+
+    SinkCredentials:
+      type: object
+      properties:
+        credentialType:
+          type: string
+          example: ACCESSTOKEN
+        accessToken:
+          type: string
+        accessTokenExpireUtc:
+          type: string
+          format: date-time
+        accessTokenType:
+          type: string
+          example: bearer
+
+    # -----------------------------------------------------------------------
+    # Edge Cloud Zones
+    # -----------------------------------------------------------------------
+    EdgeCloudZone:
+      type: object
+      description: An edge cloud zone available in the operator network.
+      required:
+        - edgeCloudZoneId
+        - edgeCloudZoneName
+        - edgeCloudProvider
+      properties:
+        edgeCloudZoneId:
+          type: string
+          description: Zone identifier — use this as `edgeCloudZoneId` in Traffic Influence requests.
+          example: camara-mec-zone-1
+        edgeCloudZoneName:
+          type: string
+          description: Human-readable name.
+          example: MEC Zone North
+        edgeCloudProvider:
+          type: string
+          description: Operator or cloud provider hosting the zone.
+          example: operator
+        edgeCloudZoneStatus:
+          $ref: "#/components/schemas/EdgeCloudZoneStatus"
+        edgeCloudRegion:
+          type: string
+          description: Region the zone belongs to.
+          example: north
+
+    EdgeCloudZoneStatus:
+      type: string
+      enum: [active, inactive, unknown]
+      example: active
+
+    # -----------------------------------------------------------------------
+    # Admin
+    # -----------------------------------------------------------------------
+    AdminSubscriptionList:
+      type: object
+      properties:
+        subscriptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/SubscriptionEntry"
+        count:
+          type: integer
+          example: 3
+
+    SubscriptionEntry:
+      type: object
+      description: Full internal state record for a subscription.
+      properties:
+        trafficInfluenceId:
+          type: string
+          description: Gateway-assigned ID.
+          example: 550e8400-e29b-41d4-a716-446655440000
+        nefSubscriptionId:
+          type: string
+          description: NEF backend subscription ID.
+        state:
+          type: string
+          enum: [ordered, created, active, inactive, error, deleted]
+        originalRequest:
+          $ref: "#/components/schemas/TrafficInfluenceRequest"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        lastNotificationAt:
+          type: string
+          format: date-time
+        errorMessage:
+          type: string
+
+    # -----------------------------------------------------------------------
+    # NEF Notification
+    # -----------------------------------------------------------------------
+    NEFNotification:
+      type: object
+      description: Asynchronous notification received from the 3GPP NEF.
+      required:
+        - subscriptionId
+        - eventType
+        - timestamp
+      properties:
+        subscriptionId:
+          type: string
+          description: NEF subscription ID.
+        eventType:
+          type: string
+          description: Event type emitted by the NEF.
+          enum:
+            - TRAFFIC_INFLUENCE_ACTIVE
+            - TRAFFIC_INFLUENCE_INACTIVE
+            - TRAFFIC_INFLUENCE_ERROR
+          example: TRAFFIC_INFLUENCE_ACTIVE
+        resourceUri:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+        additionalData:
+          type: object
+          additionalProperties: true
+
+    # -----------------------------------------------------------------------
+    # Health
+    # -----------------------------------------------------------------------
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: healthy
+        timestamp:
+          type: string
+          format: date-time
+        modules:
+          type: object
+          additionalProperties:
+            type: string
+        statistics:
+          type: object
+          additionalProperties: true
+
+    # -----------------------------------------------------------------------
+    # Error
+    # -----------------------------------------------------------------------
+    ErrorInfo:
+      type: object
+      required: [status, code, message]
+      properties:
+        status:
+          type: integer
+        code:
+          type: string
+        message:
+          type: string
+
+  responses:
+    Generic400:
+      description: Bad Request — validation error.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Validation failed
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                    message:
+                      type: string
+
+    Generic401:
+      description: Unauthorized — missing or invalid credentials.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 401
+            code: UNAUTHENTICATED
+            message: Request not authenticated due to missing, invalid, or expired credentials.
+
+    Generic403:
+      description: Forbidden — insufficient permissions.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 403
+            code: PERMISSION_DENIED
+            message: Client does not have sufficient permissions to perform this action.
+
+    Generic404:
+      description: Not Found.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 404
+            code: NOT_FOUND
+            message: The specified resource is not found.
+
+    Generic429:
+      description: Too Many Requests — rate limit exceeded.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+          example:
+            status: 429
+            code: TOO_MANY_REQUESTS
+            message: Rate limit reached.
+
+    Generic500:
+      description: Internal Server Error.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorInfo"
+
+    Generic502:
+      description: Bad Gateway — NEF backend request failed.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: NEF request failed
+              details:
+                type: string
