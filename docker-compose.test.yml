@@ -3,5 +3,5 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.test
-    container_name: c2n-test-runner
+    container_name: ctrail-test-runner
     command: sh -c "cp -r /app/config /app/tests/functional/ && go test -v ./tests/functional/..."

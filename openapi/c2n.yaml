@@ -1,20 +1,21 @@
 openapi: 3.0.3
 info:
-  title: C2N — CAMARA-to-NEF Gateway
+  title: CTRAIL — CAMARA Transformation and Routing API Integration Layer
   version: wip
   description: |
-    # C2N Gateway API
+    # CTRAIL Gateway API
 
-    C2N (CAMARA-to-NEF) is a gateway that exposes CAMARA-compliant APIs to
-    application functions and translates them to 3GPP NEF (TS 29.522)
-    subscriptions on the backend.
+    CTRAIL is a modular gateway that implements the CAMARA Transformation Function,
+    translating CAMARA Service API calls into backend-specific interfaces across
+    three ecosystem domains: network (3GPP NEF), cloud/edge (MEC platforms), and
+    management (OAM — future work).
 
-    ## APIs implemented
+    ## Implemented endpoints
 
-    | API | CAMARA specification | Status |
-    |-----|----------------------|--------|
-    | Traffic Influence | CAMARA Traffic Influence API | Implemented |
-    | Edge Cloud Zones | CAMARA Edge Application Management (partial) | Implemented |
+    | Endpoint | CAMARA API | Backend | Domain |
+    |----------|------------|---------|--------|
+    | `POST/GET/PUT/DELETE /traffic-influences` | Traffic Influence | 3GPP NEF (TS 29.522) | Network |
+    | `GET /edge-cloud-zones` | Edge Application Management | MEC platform | Cloud/Edge |
 
     ## Authentication
 
@@ -29,8 +30,8 @@ info:
     operation.
 
   license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0.html
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 
 servers:
   - url: http://localhost:8080
