@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ "main" ]
 
+# Build ──► Functional Tests (go test)
+#       └──► Functional Tests (Docker)   [parallel with go test]
+
 jobs:
 
   build:
@@ -25,6 +28,7 @@ jobs:
   test:
     name: Functional Tests
     runs-on: ubuntu-latest
+    needs: build
     steps:
       - uses: actions/checkout@v4
 
@@ -40,3 +44,13 @@ jobs:
         run: |
           cp -r config tests/functional/
           go test -v ./tests/functional/...
+
+  test-docker:
+    name: Functional Tests (Docker)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run functional tests in Docker
+        run: docker compose -f docker-compose.test.yml up --build --exit-code-from test
