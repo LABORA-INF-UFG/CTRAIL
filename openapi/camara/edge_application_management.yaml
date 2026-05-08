@@ -4,7 +4,7 @@ info:
   version: wip
   description: |
     Partial implementation of the CAMARA Edge Application Management API,
-    scoped to the edge cloud zone catalog endpoint used by C2N for zone
+    scoped to the edge cloud zone catalog endpoint used by CTRAIL for zone
     discovery. Consumers call GET /edge-cloud-zones to enumerate all zones
     known to the gateway topology engine before submitting a Traffic Influence
     subscription.

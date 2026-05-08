@@ -1,9 +1,9 @@
 
-# CAMARA2NEF Gateway - Modular Architecture
+# CTRAIL Gateway - Modular Architecture
 
 ## 📋 System Overview
 
-CAMARA2NEF Gateway is a modular implementation that bridges CAMARA APIs and the 3GPP Network Exposure Function (NEF), focusing on Traffic Influence API. The architecture is designed with **7 well-defined modules** for flexibility, maintainability, and security.
+CTRAIL Gateway is a modular implementation that bridges CAMARA APIs and backend telecommunications interfaces across three domains: 3GPP NEF (network), MEC platforms (cloud/edge), and OAM (management — future work). The architecture is designed with **7 well-defined modules** for flexibility, maintainability, and security.
 
 ### 🎯 Architectural Goals
 
@@ -707,7 +707,7 @@ curl -X GET http://localhost:8080/health
 # Subscription creation test
 curl -X POST http://localhost:8080/traffic-influences \
   -H "Content-Type: application/json" \
-  -H "User-Agent: C2N-Test-Client/1.0" \
+  -H "User-Agent: CTRAIL-Test-Client/1.0" \
   -u admin:adminpassword123 \
   -d '{
     "appId": "test-app",

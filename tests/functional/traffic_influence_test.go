@@ -184,7 +184,7 @@ func (tc *TestContext) makeRequest(method, path string, body any) *httptest.Resp
 
 	req := httptest.NewRequest(method, path, reqBody)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "C2N-Test-Client/1.0")
+	req.Header.Set("User-Agent", "CTRAIL-Test-Client/1.0")
 	// Use Basic Auth with admin credentials (password must be >= 8 chars)
 	req.SetBasicAuth("admin", "adminpassword123")
 

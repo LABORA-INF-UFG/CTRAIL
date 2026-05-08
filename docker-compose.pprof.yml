@@ -13,9 +13,9 @@ services:
       - ./logs:/app/logs
       - ./config:/app/config:ro
     networks:
-      - c2n_profiling
+      - ctrail_profiling
     restart: unless-stopped
     container_name: ctrail-pprof
 
 networks:
-  c2n_profiling:
+  ctrail_profiling:

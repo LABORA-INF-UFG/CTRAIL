@@ -1,7 +1,7 @@
-# CAMARA2NEF Gateway - Comandos Simples
+# CTRAIL Gateway - Comandos Simples
 
 help: ## Mostrar esta ajuda
-	@echo "CAMARA2NEF Gateway - Comandos disponíveis:"
+	@echo "CTRAIL Gateway - Comandos disponíveis:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
