@@ -16,11 +16,26 @@ required by the 5G Core.
 | `GET /traffic-influences/:id` | Traffic Influence | 3GPP NEF (TS 29.522) | Network |
 | `PUT /traffic-influences/:id` | Traffic Influence | 3GPP NEF (TS 29.522) | Network |
 | `DELETE /traffic-influences/:id` | Traffic Influence | 3GPP NEF (TS 29.522) | Network |
-| `GET /edge-cloud-zones` | Edge Application Management | MEC platform | Cloud/Edge |
+| `POST /apps`, `GET /apps` | Edge Application Management | In-memory app catalog | Cloud/Edge |
+| `GET /apps/:appId`, `DELETE /apps/:appId` | Edge Application Management | In-memory app catalog | Cloud/Edge |
+| `POST /deployments`, `GET /deployments` | Edge Application Management | Kubernetes (client-go) | Cloud/Edge |
+| `GET /deployments/:id`, `PATCH /deployments/:id`, `DELETE /deployments/:id` | Edge Application Management | Kubernetes (client-go) | Cloud/Edge |
+| `GET /clusters` | Edge Application Management | Kubernetes / topology | Cloud/Edge |
+| `GET /edge-cloud-zones` | Edge Application Management | Topology config | Cloud/Edge |
 
 The **Traffic Influence** implementation is the first CTRAIL instance and accompanies the
 paper **"C2N: Bridging CAMARA Service APIs and 3GPP Core Network Exposure Function"**
 accepted at SBRC 2026.
+
+The **Edge Application Management** implementation is the second CTRAIL instance. It uses
+**Kubernetes as the MEC orchestrator** (the MEAO/MEPM role) for the application lifecycle,
+and optionally registers exposed services in the **OAI MEP** `mp1` registry (ETSI MEC 011).
+It reuses the API-agnostic modules (security, ingress, state, response) and replaces only the
+backend client, mapper, and topology cluster resolution — validating the reusability claim
+against a structurally different backend. Design and compliance notes are in
+[`docs/reference/`](docs/reference/) (`EAM-BACKEND-ALIGNMENT.md`, `MEC-COMPLIANCE.md`,
+`EAM-IMPLEMENTATION-PLAN.md`). To enable it, set `EAM_ENABLED=true` and provide a `KUBECONFIG`
+(or run in-cluster).
 
 ---
 
@@ -58,17 +73,23 @@ CTRAIL/
 ├── internal/
 │   ├── camara/                     # CAMARA API data models
 │   │   ├── models.go               # Traffic Influence models
-│   │   └── edge_cloud_zones.go     # Edge Application Management models
-│   ├── nef/                        # 3GPP NEF data models and HTTP client
+│   │   ├── edge_cloud_zones.go     # Edge cloud zone models
+│   │   └── edge_application.go     # Edge Application Management models (Apps/Deployments/Clusters)
+│   ├── nef/                        # 3GPP NEF data models and HTTP client [Traffic Influence backend]
+│   ├── k8s/                        # Kubernetes backend client (client-go) [EAM MEC orchestrator]
+│   ├── mep/                        # OAI MEP mp1 service-registry client (ETSI MEC 011) [optional]
 │   ├── config/                     # Configuration loader
 │   └── modules/
-│       ├── orchestrator.go         # Central coordinator (request pipeline)
+│       ├── orchestrator.go         # Traffic Influence pipeline + route setup
+│       ├── eam_orchestrator.go     # Edge Application Management: Apps handlers + wiring
+│       ├── eam_deployments.go      # Deployment lifecycle handlers (202 + op-occurrence)
+│       ├── eam_clusters.go         # Clusters endpoint
 │       ├── security/               # Authentication, rate limiting, CORS [API-agnostic]
 │       ├── ingress/                # Request parsing and OpenAPI validation [API-agnostic]
-│       ├── topology/               # Zone-to-network identifier resolution [API-specific]
-│       ├── mapper/                 # CAMARA-to-NEF field translation [API-specific]
-│       ├── builder/                # NEF HTTP request construction [API-agnostic]
-│       ├── state/                  # Subscription lifecycle and ID correlation [API-agnostic]
+│       ├── topology/               # Zone → network (TI) and zone → cluster (EAM) resolution [API-specific]
+│       ├── mapper/                 # CAMARA→NEF and CAMARA→Kubernetes translation [API-specific]
+│       ├── builder/                # NEF HTTP request construction [Traffic Influence]
+│       ├── state/                  # Lifecycle + ID correlation (TI subscriptions, EAM catalog/deployments) [API-agnostic]
 │       └── response/               # Response transformation to CAMARA format [API-agnostic]
 ├── config/topology.json            # Zone-to-network topology mappings
 ├── openapi/                        # CAMARA and 3GPP OpenAPI specifications

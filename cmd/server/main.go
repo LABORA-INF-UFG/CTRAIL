@@ -12,9 +12,29 @@ import (
 	"time"
 
 	"github.com/LABORA-INF-UFG/ctrail/internal/config"
+	"github.com/LABORA-INF-UFG/ctrail/internal/k8s"
+	"github.com/LABORA-INF-UFG/ctrail/internal/mep"
 	"github.com/LABORA-INF-UFG/ctrail/internal/modules"
 	"github.com/gin-gonic/gin"
 )
+
+// enableEAM builds the Kubernetes (and optional OAI MEP) backend clients and
+// activates the Edge Application Management instance on the orchestrator.
+func enableEAM(orchestrator *modules.GatewayOrchestrator, cfg *config.Config) error {
+	k8sClient, err := k8s.NewClient(cfg.Kubeconfig)
+	if err != nil {
+		return fmt.Errorf("kubernetes client: %w", err)
+	}
+
+	var mepClient mep.Client
+	if cfg.MEPEnabled {
+		mepClient = mep.NewClient(cfg.MEPBaseURL)
+		log.Printf("OAI MEP service registration enabled (%s)", cfg.MEPBaseURL)
+	}
+
+	orchestrator.EnableEAM(k8sClient, cfg.K8sNamespacePrefix, mepClient)
+	return nil
+}
 
 func main() {
 	log.Printf("Starting CAMARA to NEF Gateway with modular architecture")
@@ -23,6 +43,12 @@ func main() {
 	log.Printf("Configuration loaded - NEF URL: %s, Server Port: %s", cfg.NEFBaseURL, cfg.ServerPort)
 
 	orchestrator := modules.NewGatewayOrchestrator(cfg.NEFBaseURL, cfg.NEFToken)
+
+	if cfg.EAMEnabled {
+		if err := enableEAM(orchestrator, cfg); err != nil {
+			log.Printf("Edge Application Management disabled: %v", err)
+		}
+	}
 
 	r := gin.Default()
 

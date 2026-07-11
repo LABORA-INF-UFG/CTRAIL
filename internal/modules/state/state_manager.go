@@ -28,16 +28,16 @@ const (
 // It stores both the gateway-assigned ID and the NEF subscription ID so that
 // lookups can be performed in either direction.
 type SubscriptionEntry struct {
-	TrafficInfluenceID string                         `json:"trafficInfluenceId"`
-	NEFSubscriptionID  string                         `json:"nefSubscriptionId"`
-	State              SubscriptionState              `json:"state"`
+	TrafficInfluenceID string                          `json:"trafficInfluenceId"`
+	NEFSubscriptionID  string                          `json:"nefSubscriptionId"`
+	State              SubscriptionState               `json:"state"`
 	OriginalRequest    *camara.TrafficInfluenceRequest `json:"originalRequest"`
 	NEFSubscription    *nef.TrafficInfluSub            `json:"nefSubscription"`
-	CreatedAt          time.Time                      `json:"createdAt"`
-	UpdatedAt          time.Time                      `json:"updatedAt"`
-	LastNotificationAt *time.Time                     `json:"lastNotificationAt,omitempty"`
-	ErrorMessage       string                         `json:"errorMessage,omitempty"`
-	Metadata           map[string]any                 `json:"metadata,omitempty"`
+	CreatedAt          time.Time                       `json:"createdAt"`
+	UpdatedAt          time.Time                       `json:"updatedAt"`
+	LastNotificationAt *time.Time                      `json:"lastNotificationAt,omitempty"`
+	ErrorMessage       string                          `json:"errorMessage,omitempty"`
+	Metadata           map[string]any                  `json:"metadata,omitempty"`
 }
 
 // StateManager defines the subscription lifecycle management contract.

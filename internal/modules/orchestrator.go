@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/LABORA-INF-UFG/ctrail/internal/camara"
+	"github.com/LABORA-INF-UFG/ctrail/internal/k8s"
+	"github.com/LABORA-INF-UFG/ctrail/internal/mep"
 	"github.com/LABORA-INF-UFG/ctrail/internal/modules/builder"
 	"github.com/LABORA-INF-UFG/ctrail/internal/modules/ingress"
 	"github.com/LABORA-INF-UFG/ctrail/internal/modules/mapper"
@@ -27,6 +29,10 @@ type GatewayOrchestrator struct {
 	stateManager    state.StateManager
 	responseModule  *response.ResponseHandlingModule
 	securityManager security.SecurityManager
+	// eam is the optional Edge Application Management sub-orchestrator. It is nil
+	// until EnableEAM is called (main wires it when a Kubernetes backend is
+	// available; tests inject a fake clientset).
+	eam *EAMOrchestrator
 }
 
 // NewGatewayOrchestrator constructs a GatewayOrchestrator targeting the given NEF endpoint.
@@ -61,6 +67,16 @@ func NewGatewayOrchestrator(nefBaseURL, nefToken string) *GatewayOrchestrator {
 
 	log.Printf("Gateway Orchestrator initialized successfully")
 	return orchestrator
+}
+
+// EnableEAM activates the Edge Application Management instance, backed by the
+// given Kubernetes client. It shares the orchestrator's topology engine so zone
+// definitions are common to both CTRAIL instances. nsPrefix overrides the
+// Kubernetes namespace prefix used for deployments ("" keeps the default).
+// mepClient is optional (nil disables OAI MEP service registration).
+func (gw *GatewayOrchestrator) EnableEAM(k8sClient k8s.Client, nsPrefix string, mepClient mep.Client) {
+	gw.eam = NewEAMOrchestrator(k8sClient, gw.topologyEngine, nsPrefix, mepClient)
+	log.Printf("Edge Application Management instance enabled")
 }
 
 // ProcessTrafficInfluenceRequest handles POST /traffic-influences.
@@ -474,6 +490,10 @@ func (gw *GatewayOrchestrator) SetupRoutes(router *gin.Engine) {
 
 	router.GET("/edge-cloud-zones", gw.HandleListEdgeCloudZones)
 
+	if gw.eam != nil {
+		gw.eam.RegisterRoutes(router)
+	}
+
 	admin := router.Group("/admin")
 	{
 		admin.GET("/health", gw.HandleHealthCheck)
@@ -600,6 +620,10 @@ func (gw *GatewayOrchestrator) SetupSecureRoutes(router *gin.Engine) {
 		camaraAPI.DELETE("/traffic-influences/:id", gw.ProcessTrafficInfluenceDelete)
 
 		camaraAPI.GET("/edge-cloud-zones", gw.HandleListEdgeCloudZones)
+
+		if gw.eam != nil {
+			gw.eam.RegisterRoutes(camaraAPI)
+		}
 	}
 
 	api := router.Group("/api/v1")

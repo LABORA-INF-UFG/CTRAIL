@@ -33,3 +33,6 @@ coverage.out
 
 # Compiled binary at root level
 /ctrail
+
+# Local environment file (secrets — never commit)
+.env

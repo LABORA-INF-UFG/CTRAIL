@@ -20,7 +20,8 @@ type NetworkIdentifiers struct {
 }
 
 // ZoneMapping maps a CAMARA edge cloud zone identifier to the underlying 3GPP
-// network parameters required by the NEF.
+// network parameters required by the NEF and, for the Edge Application
+// Management instance, to the Kubernetes cluster/namespace that backs the zone.
 type ZoneMapping struct {
 	ZoneID        string             `json:"zoneId"`
 	Name          string             `json:"name,omitempty"`
@@ -33,6 +34,25 @@ type ZoneMapping struct {
 	DNAI          string             `json:"dnai"`
 	Network       NetworkIdentifiers `json:"network"`
 	Description   string             `json:"description,omitempty"`
+	// ClusterRef is the Kubernetes cluster identifier that hosts this zone
+	// (CAMARA KubernetesClusterRef). Optional; used by the EAM instance.
+	ClusterRef string `json:"clusterRef,omitempty"`
+	// Namespace is the Kubernetes namespace deployments target in this zone.
+	// When empty, ClusterResolution derives one from the namespace prefix.
+	Namespace string `json:"namespace,omitempty"`
+	// K8sVersion is the reported Kubernetes version of the zone's cluster.
+	K8sVersion string `json:"k8sVersion,omitempty"`
+}
+
+// ClusterResolution is the Kubernetes placement resolved for an edge cloud zone.
+// It is the EAM analogue of NetworkIdentifiers (which serves Traffic Influence).
+type ClusterResolution struct {
+	ZoneID     string
+	RegionID   string
+	Provider   string
+	ClusterRef string
+	Namespace  string
+	K8sVersion string
 }
 
 // PolicyRule applies a NetworkIdentifiers set when a condition matches, used
@@ -45,10 +65,11 @@ type PolicyRule struct {
 
 // TopologyEngine manages zone-to-network mappings and region-based policies.
 type TopologyEngine struct {
-	zoneMappings  map[string]ZoneMapping
-	policyRules   []PolicyRule
-	defaultDNN    string
-	defaultSNSSAI *nef.Snssai
+	zoneMappings    map[string]ZoneMapping
+	policyRules     []PolicyRule
+	defaultDNN      string
+	defaultSNSSAI   *nef.Snssai
+	namespacePrefix string
 }
 
 // NewTopologyEngine creates a TopologyEngine initialised with built-in defaults
@@ -63,6 +84,7 @@ func NewTopologyEngine() *TopologyEngine {
 			Sst: 1,
 			Sd:  "010203",
 		},
+		namespacePrefix: "ctrail-",
 	}
 
 	engine.loadDefaultMappings()
@@ -110,7 +132,7 @@ func (te *TopologyEngine) loadDefaultMappings() {
 		{
 			Condition: "region=north",
 			Network: NetworkIdentifiers{
-				DNN: "north-internet",
+				DNN:    "north-internet",
 				SNSSAI: &nef.Snssai{Sst: 1, Sd: "030405"},
 			},
 			Priority: 10,
@@ -118,7 +140,7 @@ func (te *TopologyEngine) loadDefaultMappings() {
 		{
 			Condition: "region=south",
 			Network: NetworkIdentifiers{
-				DNN: "south-internet",
+				DNN:    "south-internet",
 				SNSSAI: &nef.Snssai{Sst: 1, Sd: "040506"},
 			},
 			Priority: 10,
@@ -225,6 +247,48 @@ func (te *TopologyEngine) ResolveDNAI(zoneID string) (string, error) {
 	}
 
 	return "", fmt.Errorf("no DNAI mapping found for zone: %s", zoneID)
+}
+
+// SetNamespacePrefix overrides the prefix used to derive a Kubernetes namespace
+// for zones that do not declare an explicit one (default "ctrail-").
+func (te *TopologyEngine) SetNamespacePrefix(prefix string) {
+	if prefix != "" {
+		te.namespacePrefix = prefix
+	}
+}
+
+// ResolveCluster returns the Kubernetes placement for an edge cloud zone: the
+// backing cluster reference and the namespace deployments target. This is the
+// EAM-specific counterpart to ResolveNetworkIdentifiers (Traffic Influence).
+// When the zone mapping omits an explicit namespace, one is derived as
+// "<namespacePrefix><zoneID>". An unregistered zone is an error so that callers
+// can surface a CAMARA 404/400 rather than silently deploying nowhere.
+func (te *TopologyEngine) ResolveCluster(zoneID string) (ClusterResolution, error) {
+	if zoneID == "" {
+		return ClusterResolution{}, errors.New("zone ID is required for cluster resolution")
+	}
+
+	mapping, exists := te.zoneMappings[zoneID]
+	if !exists {
+		return ClusterResolution{}, fmt.Errorf("no cluster mapping found for zone: %s", zoneID)
+	}
+
+	namespace := mapping.Namespace
+	if namespace == "" {
+		namespace = te.namespacePrefix + zoneID
+	}
+
+	res := ClusterResolution{
+		ZoneID:     zoneID,
+		RegionID:   mapping.RegionID,
+		Provider:   mapping.Provider,
+		ClusterRef: mapping.ClusterRef,
+		Namespace:  namespace,
+		K8sVersion: mapping.K8sVersion,
+	}
+
+	log.Printf("Resolved cluster for zone %s: clusterRef=%s, namespace=%s", zoneID, res.ClusterRef, res.Namespace)
+	return res, nil
 }
 
 func (te *TopologyEngine) matchesCondition(condition, regionID, appInstanceID string) bool {
