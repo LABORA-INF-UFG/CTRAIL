@@ -240,7 +240,7 @@ docker-compose top
 docker build --target development -t ctrail:dev .
 
 # Build with build args
-docker build --build-arg GO_VERSION=1.24 -t ctrail .
+docker build -t ctrail .
 ```
 
 ### Volume Management

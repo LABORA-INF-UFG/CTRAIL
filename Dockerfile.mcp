@@ -1,0 +1,17 @@
+FROM golang:1.25-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY internal/camara ./internal/camara
+COPY internal/mcpserver ./internal/mcpserver
+COPY cmd/mcp ./cmd/mcp
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/ctrail-mcp ./cmd/mcp
+
+FROM alpine:3.23
+RUN apk add --no-cache ca-certificates && \
+    addgroup -S -g 1001 appgroup && \
+    adduser -S -D -H -u 1001 -G appgroup appuser
+COPY --from=builder /out/ctrail-mcp /usr/local/bin/ctrail-mcp
+USER appuser
+EXPOSE 8081
+ENTRYPOINT ["ctrail-mcp"]

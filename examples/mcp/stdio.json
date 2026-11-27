@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "ctrail": {
+      "command": "/absolute/path/to/ctrail-mcp",
+      "env": {
+        "CTRAIL_BASE_URL": "http://localhost:8080",
+        "CTRAIL_BEARER_TOKEN": "<gateway-issued-bearer-token>",
+        "CTRAIL_MCP_READ_ONLY": "false"
+      }
+    }
+  }
+}

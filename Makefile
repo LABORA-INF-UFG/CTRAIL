@@ -38,4 +38,10 @@ ps: ## Mostrar containers rodando
 stats: ## Mostrar estatísticas do container
 	docker stats ctrail
 
-.PHONY: help build run start stop restart logs shell clean health ps stats
+build-mcp: ## Compilar o adaptador MCP
+	go build -o bin/ctrail-mcp ./cmd/mcp
+
+test-mcp: ## Testar a integração MCP
+	go test ./internal/mcpserver/... ./cmd/mcp
+
+.PHONY: help build run start stop restart logs shell clean health ps stats build-mcp test-mcp

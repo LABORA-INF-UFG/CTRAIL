@@ -23,10 +23,10 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24.2'
+          go-version-file: go.mod
 
       - name: Build
-        run: go build -v ./cmd/server/main.go
+        run: go build -v ./cmd/...
 
   test:
     name: Functional Tests
@@ -38,15 +38,21 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24.2'
+          go-version-file: go.mod
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Run functional tests
+      - name: Run unit and functional tests
         run: |
           cp -r config tests/functional/
-          go test -v ./tests/functional/...
+          go test -v ./...
+
+      - name: Run MCP race checks
+        run: go test -race ./internal/mcpserver/... ./cmd/mcp
+
+      - name: Build MCP container
+        run: docker build -f Dockerfile.mcp -t ctrail-mcp:test .
 
   test-docker:
     name: Functional Tests (Docker)

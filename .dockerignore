@@ -6,6 +6,7 @@
 *.md
 README*
 ARCHITECTURE*
+!internal/mcpserver/guide.md
 
 # Development files
 .env
